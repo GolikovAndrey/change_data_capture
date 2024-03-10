@@ -9,6 +9,9 @@ services:
     environment:
         ZOOKEEPER_CLIENT_PORT: 32181
         ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - ./mnts/zoo/data:/data
+      - ./mnts/zoo/datalog:/datalog
   
   kafka:
     image: confluentinc/cp-kafka:7.5.2
@@ -19,46 +22,54 @@ services:
     environment:
         KAFKA_BROKER_ID: 1
         KAFKA_ZOOKEEPER_CONNECT: zookeeper:32181
-        KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-        KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-        KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+        KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: LISTENER_DOCKER_INTERNAL:PLAINTEXT,LISTENER_DOCKER_EXTERNAL:PLAINTEXT
+        KAFKA_INTER_BROKER_LISTENER_NAME: LISTENER_DOCKER_INTERNAL
+        KAFKA_ADVERTISED_LISTENERS: LISTENER_DOCKER_INTERNAL://kafka:19092,LISTENER_DOCKER_EXTERNAL://${DOCKER_HOST_IP:-127.0.0.1}:29092
         KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
         KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
         KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
         KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 100
+        KAFKA_LOG4J_LOGGERS: "kafka.controller=INFO,kafka.producer.async.DefaultEventHandler=INFO,state.change.logger=INFO"
         KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
         KAFKA_DELETE_TOPIC_ENABLE: "true"
+    volumes:
+      - ./mnts/kafka/data:/var/lib/kafka/data
     healthcheck:
         test: nc -z localhost 29092 || exit 1
         interval: 5s
         timeout: 5s
         retries: 10
 
-
-  # mysql:
-  #   image: quay.io/debezium/example-mysql:2.4
-  #   restart: always
-  #   environment:
-  #     MYSQL_ROOT_PASSWORD: debezium
-  #     MYSQL_USER: mysqluser
-  #     MYSQL_PASSWORD: mysqlpw
-  #   ports:
-  #     - "3306:3306"
+  mysql:
+    image: mysql:8.3.0
+    restart: always
+    depends_on:
+        - zookeeper
+        - kafka
+    environment:
+      MYSQL_ROOT_PASSWORD: debezium
+      MYSQL_USER: mysqluser
+      MYSQL_PASSWORD: mysqlpw
+    ports:
+      - "3306:3306"
   
-  # mysql-cli:
-  #   image: mysql:8.2
-  #   restart: always
-  #   command:
-  #     - exec mysql -h 0.0.0.0 -P 3306 -uroot -p pdebezium
-  
-  # kafka-connect:
-  #   image: quay.io/debezium/connect:2.4
-  #   restart: always
-  #   # link:
-  #   # - "kafka:kafka"
-  #   # - "mysql:mysql"
-  #   environment:
-  #     GROUP_ID: 1 
-  #     CONFIG_STORAGE_TOPIC: my_connect_configs 
-  #     OFFSET_STORAGE_TOPIC: my_connect_offsets 
-  #     STATUS_STORAGE_TOPIC: my_connect_statuses
+  kafka-connect:
+    image: debezium/connect:2.6
+    restart: always
+    depends_on:
+        - zookeeper
+        - kafka
+    links:
+        - kafka
+        - mysql
+    ports:
+        - "8083:8083"
+    environment:
+        - BOOTSTRAP_SERVERS=kafka:19092
+        - GROUP_ID=1
+        - CONFIG_STORAGE_TOPIC=my_connect_configs
+        - OFFSET_STORAGE_TOPIC=my_connect_offsets
+        - STATUS_STORAGE_TOPIC=my_connect_statuses
+        - CONNECT_CONFIG_PROVIDERS=file
+        - CONNECT_CONFIG_PROVIDERS_FILE_CLASS=org.apache.kafka.common.config.provider.FileConfigProvider
+        - REST_HOST_NAME=0.0.0.0
