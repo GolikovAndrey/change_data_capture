@@ -1,75 +1,75 @@
-version: "3.9"
-
+version: '2'
 services:
-
   zookeeper:
     container_name: zookeeper
-    image: confluentinc/cp-zookeeper:7.5.2
+    image: quay.io/debezium/zookeeper:latest
     ports:
-        - '32181:32181'
-    environment:
-        ZOOKEEPER_CLIENT_PORT: 32181
-        ZOOKEEPER_TICK_TIME: 2000
+     - 2181:2181
+     - 2888:2888
+     - 3888:3888
   
   kafka:
     container_name: kafka
-    image: confluentinc/cp-kafka:7.5.2
+    image: quay.io/debezium/kafka:latest
     ports:
-        - '29092:29092'
-    depends_on:
-        - zookeeper
+     - 9092:9092
+    links:
+     - zookeeper
     environment:
-        KAFKA_BROKER_ID: 1
-        KAFKA_ZOOKEEPER_CONNECT: zookeeper:32181
-        KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: LISTENER_DOCKER_INTERNAL:PLAINTEXT,LISTENER_DOCKER_EXTERNAL:PLAINTEXT
-        KAFKA_INTER_BROKER_LISTENER_NAME: LISTENER_DOCKER_INTERNAL
-        KAFKA_ADVERTISED_LISTENERS: LISTENER_DOCKER_INTERNAL://kafka:19092,LISTENER_DOCKER_EXTERNAL://${DOCKER_HOST_IP:-127.0.0.1}:29092
-        KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-        KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-        KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-        KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 100
-        KAFKA_LOG4J_LOGGERS: "kafka.controller=INFO,kafka.producer.async.DefaultEventHandler=INFO,state.change.logger=INFO"
-        KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
-        KAFKA_DELETE_TOPIC_ENABLE: "true"
-    healthcheck:
-        test: nc -z localhost 29092 || exit 1
-        interval: 5s
-        timeout: 5s
-        retries: 10
+     - ZOOKEEPER_CONNECT=zookeeper:2181
 
-  connect:
-    container_name: connect
-    image: debezium/connect
+  kafka-ui:
+    container_name: kafka-ui
     depends_on:
-      - zookeeper
-      - kafka
-    ports:
-      - "8083:8083"
+      kafka:
+        condition: service_started
+        required: true
     environment:
-      BOOTSTRAP_SERVERS: "kafka:29092"
-      GROUP_ID: "1"
+      spring.config.additional-location: /etc/kafkaui/config.yaml
+    image: provectuslabs/kafka-ui:latest
+    networks:
+      default: null
+    ports:
+      - mode: ingress
+        target: 8080
+        published: "8081"
+        protocol: tcp
+    volumes:
+      - type: bind
+        source: ./kafkaui_config.yaml
+        target: /etc/kafkaui/config.yaml
+        bind:
+          create_host_path: true
 
   mysql:
     container_name: mysql
-    image: mysql:8.3.0
+    image: quay.io/debezium/example-mysql:latest
     ports:
-      - "3306:3306"
+     - 3306:3306
     environment:
-      MYSQL_ROOT_PASSWORD: debezium
-      MYSQL_USER: mysqluser
-      MYSQL_PASSWORD: mysqlpw
-
-  sink:
-      container_name: sink
-      image: altinity/clickhouse-sink-connector:latest
+     - MYSQL_ROOT_PASSWORD=debezium
+     - MYSQL_USER=mysqluser
+     - MYSQL_PASSWORD=mysqlpw
   
-  clickhouse:
-    container_name: clickhouse
-    image: clickhouse/clickhouse-server:latest
+  apicurio:
+    container_name: apicurio
+    image: apicurio/apicurio-registry-mem:2.2.5.Final
     ports:
-      - "8123:8123"
-      - "9005:9005"
+     - 8080:8080
+  
+  connect:
+    container_name: connect
+    image: quay.io/debezium/connect:latest
+    ports:
+     - 8083:8083
+    links:
+     - kafka
+     - mysql
+     - apicurio
     environment:
-      - CLICKHOUSE_USER=root
-      - CLICKHOUSE_PASSWORD=root
-      - CLICKHOUSE_DB=test
+     - BOOTSTRAP_SERVERS=kafka:9092
+     - GROUP_ID=1
+     - CONFIG_STORAGE_TOPIC=my_connect_configs
+     - OFFSET_STORAGE_TOPIC=my_connect_offsets
+     - STATUS_STORAGE_TOPIC=my_connect_statuses
+     - ENABLE_APICURIO_CONVERTERS=true
