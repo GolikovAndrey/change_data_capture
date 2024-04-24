@@ -1,49 +1,44 @@
-import os
 import sqlalchemy
 import cdc_test.value_generators as vg
 
-CONN_PARAMS = {
-    'MYSQL_USER': os.environ['MYSQL_USER'],
-    'MYSQL_PASSWORD': os.environ['MYSQL_PASSWORD'],
-    'MYSQL_HOST': os.environ['MYSQL_HOST'],
-    'MYSQL_PORT': os.environ['MYSQL_PORT'],
-    'MYSQL_DATABASE': os.environ['MYSQL_DATABASE']
-}
+from cdc_test.connection_parameters import CONN_PARAMS
 
 class SQLHelper:
 
-    def ___init___(self):
+    def init(self):
         user_creds = f"{CONN_PARAMS['MYSQL_USER']}:{CONN_PARAMS['MYSQL_PASSWORD']}"
         db_creds = f"{CONN_PARAMS['MYSQL_HOST']}:{CONN_PARAMS['MYSQL_PORT']}"
         extras = "charset=utf8mb4"
 
-        engine = sqlalchemy.create_engine(f"mysql+mysqlconnector://{user_creds}@{db_creds}?{extras}")
+        engine = sqlalchemy.create_engine(f"mysql+mysqlconnector://{user_creds}@{db_creds}")
 
         with engine.connect() as conn:
-            conn.exectute("""
-                CREATE DATABASE IF NOT EXISTS cdc_test;
-                
-                USE cdc_test;
-                
+            conn.execute("CREATE DATABASE IF NOT EXISTS cdc;")
+            conn.execute("USE cdc;")
+            conn.execute("""
                 CREATE TABLE IF NOT EXISTS test_table(
                     id int NOT NULL AUTO_INCREMENT,
                     int_val int NOT NULL,
                     str_val VARCHAR(20),
-                    double_val DECIMAL(14, 12),
+                    double_val DECIMAL(10, 2),
                     datetime_val TIMESTAMP NOT NULL,
-                    json_val JSON NOT NULL
-                    PRIMARY KEY (id)
-                );
+                    json_val JSON NOT NULL,
+                    PRIMARY KEY (`id`)
+                )
+                ENGINE=InnoDB 
+                DEFAULT CHARSET=utf8mb4;
             """)
         print("Произведена инициализация для тестирования CDC.")
 
     def create_mysql_engine(self):
         user_creds = f"{CONN_PARAMS['MYSQL_USER']}:{CONN_PARAMS['MYSQL_PASSWORD']}"
         db_creds = f"{CONN_PARAMS['MYSQL_HOST']}:{CONN_PARAMS['MYSQL_PORT']}"
-        db = CONN_PARAMS['MYSQL_DATABASE']
+        db = "cdc"
         extras = "charset=utf8mb4"
+        engine = sqlalchemy.create_engine(f"mysql+mysqlconnector://{user_creds}@{db_creds}/{db}?{extras}")
+        connection = engine.connect()
 
-        return sqlalchemy.create_engine(f"mysql+mysqlconnector://{user_creds}@{db_creds}/{db}?{extras}")
+        return connection
 
     def execute_query(self, query: str):
         with self.create_mysql_engine() as conn:
@@ -58,15 +53,15 @@ class SQLHelper:
                 int_val, 
                 str_val, 
                 double_val, 
-                json_val, 
-                array_val
+                datetime_val, 
+                json_val
             )
             VALUES (
                 {vg.generate_int_value()},
-                {vg.generate_str_value()},
+                '{vg.generate_str_value()}',
                 {vg.generate_double_value()},
-                {vg.generate_timestamp_value()},
-                {vg.genarate_array()}
+                '{vg.generate_timestamp_value()}',
+                '{vg.genarate_array()}'
             )
         """
         

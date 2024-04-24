@@ -8,10 +8,12 @@ print(f"Будет произведено транзакций: {rng}")
 
 helper = SQLHelper()
 
+helper.init()
+
 functions = [
     helper.insert_row,
-    helper.delete_row,
-    helper.update_row
+    # helper.delete_row,
+    # helper.update_row
 ]
 
 for _ in range(0, rng):

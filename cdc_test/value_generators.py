@@ -13,11 +13,11 @@ def generate_str_value():
             + string.digits 
             + string.ascii_lowercase 
             + string.ascii_letters
-        ) for _ in range(r.randint(0, 20))
+        ) for _ in range(r.randint(5, 20))
     )
 
 def generate_double_value():
-    return round(r.random() * r.randint(10, 100), 12)
+    return round(r.random() * r.randint(10, 100), 2)
 
 def generate_timestamp_value():
     return (

@@ -168,3 +168,4 @@ cache/
 *.csv
 *.json
 /.vscode
+connection_parameters.py
