@@ -32,7 +32,7 @@ services:
     ports:
       - mode: ingress
         target: 8080
-        published: "8081"
+        published: "9000"
         protocol: tcp
     volumes:
       - type: bind
@@ -51,38 +51,82 @@ services:
      - MYSQL_USER=mysqluser
      - MYSQL_PASSWORD=mysqlpw
   
-  apicurio:
-    container_name: apicurio
-    image: apicurio/apicurio-registry-mem:2.2.5.Final
+  schema-registry:
+    image: confluentinc/cp-schema-registry:latest
+    hostname: schema-registry
+    container_name: schema-registry
+    depends_on:
+      - zookeeper
+      - kafka
     ports:
-     - 8080:8080
+      - "8081:8080"
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_CONNECTION_URL: 'zookeeper:2181'
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: 'kafka:9092'
+      SCHEMA_REGISTRY_ACCESS_CONTROL_ALLOW_ORIGIN: '*'
+      SCHEMA_REGISTRY_ACCESS_CONTROL_ALLOW_METHODS: 'GET,POST,PUT,OPTIONS'
+
+  schema-registry-ui:
+    image: landoop/schema-registry-ui
+    hostname: schema-registry-ui
+    depends_on:
+      - kafka
+      - schema-registry
+    ports:
+      - "8002:8000"
+    environment:
+      SCHEMAREGISTRY_URL: 'http://schema-registry:8080'
   
   connect:
     container_name: connect
-#    image: quay.io/debezium/connect:latest
-    build:
-      context: .
-      dockerfile: build/Dockerfile
+    image: confluentinc/cp-kafka-connect-base:latest
     ports:
      - 8083:8083
     links:
      - kafka
      - mysql
-     - apicurio
+     - schema-registry
     environment:
-     - BOOTSTRAP_SERVERS=kafka:9092
-     - GROUP_ID=1
-     - CONFIG_STORAGE_TOPIC=my_connect_configs
-     - OFFSET_STORAGE_TOPIC=my_connect_offsets
-     - STATUS_STORAGE_TOPIC=my_connect_statuses
-     - ENABLE_APICURIO_CONVERTERS=true
+      CONNECT_BOOTSTRAP_SERVERS: kafka:9092
+      CONNECT_REST_PORT: 8083
+      CONNECT_GROUP_ID: kafka-connect
+      CONNECT_CONFIG_STORAGE_TOPIC: cdc-configs
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: "1"
+      CONNECT_OFFSET_STORAGE_TOPIC: cdc-offsets
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: "1"
+      CONNECT_STATUS_STORAGE_TOPIC: cdc-status
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: "1"
+      CONNECT_KEY_CONVERTER: io.confluent.connect.avro.AvroConverter
+      CONNECT_KEY_CONVERTER_SCHEMA_REGISTRY_URL: http://schema-registry:8080
+      CONNECT_VALUE_CONVERTER: io.confluent.connect.avro.AvroConverter
+      CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: http://schema-registry:8080
+      CONNECT_INTERNAL_KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_INTERNAL_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_REST_ADVERTISED_HOST_NAME: "kafka-connect"
+      CONNECT_PLUGIN_PATH: /usr/share/java,/usr/share/confluent-hub-components,/data
+      CONNECT_CONFIG_PROVIDERS: file
+      CONNECT_CONFIG_PROVIDERS_FILE_CLASS: org.apache.kafka.common.config.provider.FileConfigProvider
+    command:
+      - bash
+      - -c
+      - |
+        echo "Installing Connector"
+        confluent-hub install --no-prompt debezium/debezium-connector-mysql:1.7.0
+        confluent-hub install --no-prompt confluentinc/kafka-connect-jdbc:10.7.6
+        confluent-hub install --no-prompt clickhouse/clickhouse-kafka-connect:v1.0.16
+        #
+        echo "Launching Kafka Connect worker"
+        /etc/confluent/docker/run &
+        #
+        sleep infinity
 
   clickhouse:
     container_name: clickhouse
     image: bitnami/clickhouse:latest
     ports:
       - "8123:8123"
-      - "9000:9000"
+      - "9001:9001"
       - "9009:9009"
     environment:
       - CLICKHOUSE_PASSWORD=default_password

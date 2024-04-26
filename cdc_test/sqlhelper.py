@@ -71,7 +71,7 @@ class SQLHelper:
 
         query = f"""
             DELETE FROM test_table 
-            WHERE id = {self.get_random_int()}
+            WHERE id = {self.get_random_id()}
         """
         
         self.execute_query(query)
@@ -85,10 +85,17 @@ class SQLHelper:
                 double_val = {vg.generate_double_value()},
                 json_val = {vg.generate_timestamp_value()},
                 array = {vg.genarate_array()}
-            WHERE id = {self.get_random_int()}
+            WHERE id = {self.get_random_id()}
         """
 
         self.execute_query(query)
 
-    def get_random_int(self):
-        return self.execute_query("SELECT id FROM test_table LIMIT 1")
+    def get_random_id(self):
+        return (
+            self.execute_query(f"""
+                SELECT id 
+                FROM test_table 
+                LIMIT 1
+            """)
+            .fetchone()[0]
+        )

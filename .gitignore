@@ -169,3 +169,5 @@ cache/
 *.json
 /.vscode
 connection_parameters.py
+*.jar
+*.properties

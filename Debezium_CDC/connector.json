@@ -1,0 +1,28 @@
+{
+    "name": "mysql-connect",
+    "config": {
+        "connector.class": "io.debezium.connector.mysql.MySqlConnector",
+        "database.allowPublicKeyRetrieval": "true",
+        "database.dbname": "cdc",
+        "database.user": "root",
+        "slot.name": "cdc_test",
+        "database.server.id": "184054",
+        "topics": "cdc_topic",
+        "database.history.kafka.bootstrap.servers": "kafka:9092",
+        "database.history.kafka.topic": "schema-changes.cdc",
+        "database.server.name": "mysql_server",
+        "database.port": "3306",
+        "null.handling.mode": "keep",
+        "topic.prefix": "cdc_mysql_",
+        "decimal.handling.mode": "string",
+        "database.hostname": "mysql",
+        "database.password": "debezium",
+        "name": "mysql-connect",
+        "value.converter.schemas.enable": "true",
+        "key.converter.schemas.enable": "true",
+        "value.converter": "io.confluent.connect.avro.AvroConverter",
+        "key.converter": "io.confluent.connect.avro.AvroConverter",
+        "value.converter.schema.registry.url":"http://localhost:8080",
+        "key.converter.schema.registry.url":"http://localhost:8080"
+    }
+}
