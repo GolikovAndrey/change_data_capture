@@ -1,125 +1,110 @@
 version: '2'
 services:
   zookeeper:
+    image: confluentinc/cp-zookeeper:6.2.0
     container_name: zookeeper
-    image: quay.io/debezium/zookeeper:latest
-    ports:
-     - 2181:2181
-     - 2888:2888
-     - 3888:3888
-  
-  kafka:
-    container_name: kafka
-    image: quay.io/debezium/kafka:latest
-    ports:
-     - 9092:9092
-    links:
-     - zookeeper
     environment:
-     - ZOOKEEPER_CONNECT=zookeeper:2181
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
 
-  kafka-ui:
-    container_name: kafka-ui
+  broker:
+    image: confluentinc/cp-kafka:6.2.0
+    container_name: broker
     depends_on:
-      kafka:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 100
+
+  broker-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: broker-ui
+    depends_on:
+      broker:
         condition: service_started
         required: true
     environment:
       spring.config.additional-location: /etc/kafkaui/config.yaml
-    image: provectuslabs/kafka-ui:latest
-    networks:
-      default: null
     ports:
       - mode: ingress
         target: 8080
-        published: "9000"
+        published: 9000
         protocol: tcp
     volumes:
       - type: bind
-        source: ./kafkaui_config.yaml
+        source: ./configs/kafkaui_config.yaml
         target: /etc/kafkaui/config.yaml
         bind:
           create_host_path: true
 
-  mysql:
-    container_name: mysql
-    image: mysql:latest
-    ports:
-     - 3306:3306
-    environment:
-     - MYSQL_ROOT_PASSWORD=debezium
-     - MYSQL_USER=mysqluser
-     - MYSQL_PASSWORD=mysqlpw
-  
   schema-registry:
-    image: confluentinc/cp-schema-registry:latest
-    hostname: schema-registry
+    image: confluentinc/cp-schema-registry:6.2.0
     container_name: schema-registry
-    depends_on:
-      - zookeeper
-      - kafka
     ports:
-      - "8081:8080"
+      - "8081:8081"
+    depends_on:
+      - broker
     environment:
       SCHEMA_REGISTRY_HOST_NAME: schema-registry
-      SCHEMA_REGISTRY_KAFKASTORE_CONNECTION_URL: 'zookeeper:2181'
-      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: 'kafka:9092'
-      SCHEMA_REGISTRY_ACCESS_CONTROL_ALLOW_ORIGIN: '*'
-      SCHEMA_REGISTRY_ACCESS_CONTROL_ALLOW_METHODS: 'GET,POST,PUT,OPTIONS'
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: broker:29092
 
-  schema-registry-ui:
-    image: landoop/schema-registry-ui
-    hostname: schema-registry-ui
+  kafka-connect:
+    image: confluentinc/cp-kafka-connect-base:6.2.0
+    container_name: kafka-connect
     depends_on:
-      - kafka
+      - broker
       - schema-registry
     ports:
-      - "8002:8000"
+      - "8083:8083"
     environment:
-      SCHEMAREGISTRY_URL: 'http://schema-registry:8080'
-  
-  connect:
-    container_name: connect
-    image: confluentinc/cp-kafka-connect-base:latest
-    ports:
-     - 8083:8083
-    links:
-     - kafka
-     - mysql
-     - schema-registry
-    environment:
-      CONNECT_BOOTSTRAP_SERVERS: kafka:9092
+      CONNECT_BOOTSTRAP_SERVERS: "broker:29092"
       CONNECT_REST_PORT: 8083
       CONNECT_GROUP_ID: kafka-connect
-      CONNECT_CONFIG_STORAGE_TOPIC: cdc-configs
-      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: "1"
-      CONNECT_OFFSET_STORAGE_TOPIC: cdc-offsets
-      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: "1"
-      CONNECT_STATUS_STORAGE_TOPIC: cdc-status
-      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: "1"
-      CONNECT_KEY_CONVERTER: io.confluent.connect.avro.AvroConverter
-      CONNECT_KEY_CONVERTER_SCHEMA_REGISTRY_URL: http://schema-registry:8080
+      CONNECT_CONFIG_STORAGE_TOPIC: _connect-configs
+      CONNECT_OFFSET_STORAGE_TOPIC: _connect-offsets
+      CONNECT_STATUS_STORAGE_TOPIC: _connect-status
+      CONNECT_KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
       CONNECT_VALUE_CONVERTER: io.confluent.connect.avro.AvroConverter
-      CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: http://schema-registry:8080
-      CONNECT_INTERNAL_KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
-      CONNECT_INTERNAL_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: 'http://schema-registry:8081'
       CONNECT_REST_ADVERTISED_HOST_NAME: "kafka-connect"
-      CONNECT_PLUGIN_PATH: /usr/share/java,/usr/share/confluent-hub-components,/data
-      CONNECT_CONFIG_PROVIDERS: file
-      CONNECT_CONFIG_PROVIDERS_FILE_CLASS: org.apache.kafka.common.config.provider.FileConfigProvider
+      CONNECT_LOG4J_APPENDER_STDOUT_LAYOUT_CONVERSIONPATTERN: "[%d] %p %X{connector.context}%m (%c:%L)%n"
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: "1"
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: "1"
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: "1"
+      #  ---------------
+      CONNECT_PLUGIN_PATH: /usr/share/java,/usr/share/confluent-hub-components,/data/connect-jars
     command:
       - bash
       - -c
       - |
         echo "Installing Connector"
         confluent-hub install --no-prompt debezium/debezium-connector-mysql:1.7.0
-        confluent-hub install --no-prompt confluentinc/kafka-connect-jdbc:10.7.6
-        confluent-hub install --no-prompt clickhouse/clickhouse-kafka-connect:v1.0.16
+        confluent-hub install --no-prompt clickhouse/clickhouse-kafka-connect:latest
         #
         echo "Launching Kafka Connect worker"
         /etc/confluent/docker/run &
         #
         sleep infinity
+
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=debezium
+      - MYSQL_USER=mysqluser
+      - MYSQL_PASSWORD=mysqlpw
 
   clickhouse:
     container_name: clickhouse

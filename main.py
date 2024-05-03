@@ -1,22 +1,12 @@
-import sys
+import argparse
 import random
 from cdc_test.sqlhelper import SQLHelper
 
-rng = int(sys.argv[1])
+argParser = argparse.ArgumentParser()
+argParser.add_argument("--insert", type=int, default=0, help="Кол-во операций INSERT")
+argParser.add_argument("--update", type=int, default=0, help="Кол-во операций UPDATE")
+argParser.add_argument("--delete", type=int, default=0, help="Кол-во операций DELETE")
+args = argParser.parse_args()
 
-print(f"Будет произведено транзакций: {rng}")
-
-helper = SQLHelper()
-
-helper.init()
-
-functions = [
-    helper.insert_row,
-    # helper.delete_row,
-    # helper.update_row
-]
-
-for _ in range(0, rng):
-    random.choice(functions)()
-
-print("Транзакции были проведены успешно.")
+helper = SQLHelper(args.insert, args.update, args.delete)
+helper.run_transactions()
