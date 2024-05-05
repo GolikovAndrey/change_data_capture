@@ -38,7 +38,7 @@ services:
     ports:
       - mode: ingress
         target: 8080
-        published: 9000
+        published: 4040
         protocol: tcp
     volumes:
       - type: bind
@@ -81,7 +81,6 @@ services:
       CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: "1"
       CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: "1"
       CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: "1"
-      #  ---------------
       CONNECT_PLUGIN_PATH: /usr/share/java,/usr/share/confluent-hub-components,/data/connect-jars
     command:
       - bash
@@ -111,6 +110,7 @@ services:
     image: bitnami/clickhouse:latest
     ports:
       - "8123:8123"
+      - "9000:9000"
       - "9001:9001"
       - "9009:9009"
     environment:
