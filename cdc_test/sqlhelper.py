@@ -1,5 +1,4 @@
 import datetime
-import time
 
 import sqlalchemy
 import random as r
@@ -47,7 +46,8 @@ class SQLHelper:
                     int_val int NOT NULL,
                     str_val VARCHAR(20),
                     double_val DECIMAL(10, 2),
-                    datetime_val TIMESTAMP NOT NULL,
+                    inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
                     PRIMARY KEY (`id`)
                 )
                 ENGINE=InnoDB 
@@ -68,13 +68,14 @@ class SQLHelper:
             CREATE TABLE IF NOT EXISTS cdc.`test_table` (
                 id Int32,
                 int_val Int32,
-                str_val Varchar(20) DEFAULT NULL,
-                double_val Decimal(10, 2) DEFAULT NULL,
-                datetime_val DateTime,
-                created_at DateTime DEFAULT now(),
-                is_deleted UInt8 DEFAULT 0
+                str_val Varchar(20),
+                double_val Decimal(10, 2),
+                inserted_at DateTime,
+                updated_at Nullable(DateTime),
+                delivered_at DateTime DEFAULT now(),
+                __deleted BOOLEAN DEFAULT false
             ) 
-            ENGINE=ReplacingMergeTree(created_at, is_deleted)
+            ENGINE=ReplacingMergeTree(delivered_at, __deleted)
             ORDER BY id
             SETTINGS index_granularity = 8192;
         """)
@@ -107,14 +108,12 @@ class SQLHelper:
                 INSERT INTO test_table(
                     int_val, 
                     str_val, 
-                    double_val,
-                    datetime_val
+                    double_val
                 )
                 VALUES (
                     {vg.generate_int_value()},
                     '{vg.generate_str_value()}',
-                    {vg.generate_double_value()},
-                    '{vg.generate_timestamp_value()}'
+                    {vg.generate_double_value()}
                 )
             """
 
@@ -122,7 +121,7 @@ class SQLHelper:
 
         end = datetime.datetime.now()
         print(f"Конец транзакций (INSERT): {end}")
-        print(f"Транзакции были выполнены за {(end - start).seconds} секунд {(start - end).microseconds} миллисекунд.")
+        print(f"Транзакции были выполнены за {(end - start).seconds} секунд.")
 
     def delete_row(self) -> None:
         start = datetime.datetime.now()
@@ -137,7 +136,7 @@ class SQLHelper:
 
         end = datetime.datetime.now()
         print(f"Конец транзакций (DELETE): {end}")
-        print(f"Транзакции были выполнены за {(end - start).seconds} секунд {(start - end).microseconds} миллисекунд.")
+        print(f"Транзакции были выполнены за {(end - start).seconds} секунд.")
 
     def update_row(self) -> None:
         start = datetime.datetime.now()
@@ -148,8 +147,7 @@ class SQLHelper:
                 UPDATE test_table
                 SET int_val = {vg.generate_int_value()},
                     str_val = '{vg.generate_str_value()}',
-                    double_val = {vg.generate_double_value()},
-                    datetime_val = '{vg.generate_timestamp_value()}'
+                    double_val = {vg.generate_double_value()}
                 WHERE id = {self.get_random_id()}
             """
 
@@ -157,7 +155,7 @@ class SQLHelper:
 
         end = datetime.datetime.now()
         print(f"Конец транзакций (UPDATE): {end}")
-        print(f"Транзакции были выполнены за {(end - start).seconds} секунд {(start - end).microseconds} миллисекунд.")
+        print(f"Транзакции были выполнены за {(end - start).seconds} секунд.")
 
     def get_random_id(self) -> int:
         min_max = (
