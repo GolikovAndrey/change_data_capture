@@ -1,11 +1,11 @@
 import datetime
-
 import sqlalchemy
 import random as r
 import pandas as pd
+import cdc_test.value_generators as vg
+from cdc_test.get_ddls import get_clickhouse_ddl, get_mysql_ddl
 from clickhouse_driver import Client
 from clickhouse_sqlalchemy import make_session
-import cdc_test.value_generators as vg
 
 from cdc_test.connection_parameters import CONN_PARAMS
 
@@ -40,19 +40,7 @@ class SQLHelper:
         with engine.connect() as conn:
             conn.execute("CREATE DATABASE IF NOT EXISTS cdc;")
             conn.execute("USE cdc;")
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS test_table(
-                    id int NOT NULL AUTO_INCREMENT,
-                    int_val int NOT NULL,
-                    str_val VARCHAR(20),
-                    double_val DECIMAL(10, 2),
-                    inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
-                    PRIMARY KEY (`id`)
-                )
-                ENGINE=InnoDB 
-                DEFAULT CHARSET=utf8mb4;
-            """)
+            conn.execute(get_mysql_ddl())
         print("Создана таблица в MySQL.")
 
     def create_clickhouse_table(self):
@@ -64,21 +52,7 @@ class SQLHelper:
 
         client.execute("CREATE DATABASE IF NOT EXISTS cdc;")
         client.execute("USE cdc;")
-        client.execute("""
-            CREATE TABLE IF NOT EXISTS cdc.`test_table` (
-                id Int32,
-                int_val Int32,
-                str_val Varchar(20),
-                double_val Decimal(10, 2),
-                inserted_at DateTime,
-                updated_at Nullable(DateTime),
-                delivered_at DateTime DEFAULT now(),
-                __deleted BOOLEAN DEFAULT false
-            ) 
-            ENGINE=ReplacingMergeTree(delivered_at, __deleted)
-            ORDER BY id
-            SETTINGS index_granularity = 8192;
-        """)
+        client.execute(get_clickhouse_ddl())
 
         print("Создана таблица в ClickHouse")
 
@@ -126,10 +100,15 @@ class SQLHelper:
     def delete_row(self) -> None:
         start = datetime.datetime.now()
         print(f"Начало транзакций (DELETE): {start}")
+
+        idxs = []
+
         for i in range(self.delete_count):
+            idx = self.get_random_id()
+            idxs.append(idx)
             query = f"""
                 DELETE FROM test_table 
-                WHERE id = {self.get_random_id()}
+                WHERE id = {idx}
             """
 
             self.execute_query(query)
@@ -137,18 +116,24 @@ class SQLHelper:
         end = datetime.datetime.now()
         print(f"Конец транзакций (DELETE): {end}")
         print(f"Транзакции были выполнены за {(end - start).seconds} секунд.")
+        print(f"Удалению подверглись записи со следующими индексами: {idxs}")
 
     def update_row(self) -> None:
         start = datetime.datetime.now()
         print(f"Начало транзакций (UPDATE): {start}")
 
+        idxs = []
+
         for i in range(self.update_count):
+            idx = self.get_random_id()
+            idxs.append(idx)
+
             query = f"""
                 UPDATE test_table
                 SET int_val = {vg.generate_int_value()},
                     str_val = '{vg.generate_str_value()}',
                     double_val = {vg.generate_double_value()}
-                WHERE id = {self.get_random_id()}
+                WHERE id = {idx}
             """
 
             self.execute_query(query)
@@ -156,6 +141,7 @@ class SQLHelper:
         end = datetime.datetime.now()
         print(f"Конец транзакций (UPDATE): {end}")
         print(f"Транзакции были выполнены за {(end - start).seconds} секунд.")
+        print(f"Изменению подверглись записи со следующими индексами: {idxs}")
 
     def get_random_id(self) -> int:
         min_max = (

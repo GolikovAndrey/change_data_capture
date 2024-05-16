@@ -1,5 +1,4 @@
 import argparse
-import random
 from cdc_test.sqlhelper import SQLHelper
 
 argParser = argparse.ArgumentParser()
