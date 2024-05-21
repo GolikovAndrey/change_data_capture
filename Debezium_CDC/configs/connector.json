@@ -1,0 +1,41 @@
+{
+    "name": "mysql-connect",
+    "config": {
+        "connector.class": "io.debezium.connector.mysql.MySqlConnector",
+        "database.allowPublicKeyRetrieval": "true",
+        "database.dbname": "cdc",
+        "database.user": "root",
+        "slot.name": "cdc_test",
+        "database.server.id": "184054",
+        "topics": "cdc_topic",
+        "database.history.kafka.bootstrap.servers": "broker:29092",
+        "database.history.kafka.topic": "schema-changes.cdc",
+        "database.server.name": "mysql_server",
+        "database.port": "3306",
+        "null.handling.mode": "keep",
+        "topic.prefix": "cdc_mysql_",
+        "decimal.handling.mode": "precise",
+        "database.hostname": "mysql",
+        "database.password": "debezium",
+        "name": "mysql-connect",
+        "value.converter.schemas.enable": "true",
+        "key.converter.schemas.enable": "true",
+        "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+        "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+        "value.converter.schema.registry.url":"http://schema-registry:8081",
+        "key.converter.schema.registry.url":"http://schema-registry:8081",
+
+        "errors.tolerance": "all",
+        "errors.deadletterqueue.topic.name":"dlq_mysql",
+        "errors.deadletterqueue.topic.replication.factor": 1,
+
+        "transforms": "Unwrap, Cast",
+
+        "transforms.Unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
+        "transforms.Unwrap.drop.tombstones": false,
+        "transforms.Unwrap.delete.handling.mode": "rewrite",
+
+        "transforms.Cast.type": "org.apache.kafka.connect.transforms.Cast$Value",
+        "transforms.Cast.spec": "__deleted:boolean"
+    }
+}

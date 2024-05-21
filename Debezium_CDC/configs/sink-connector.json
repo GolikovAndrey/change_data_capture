@@ -1,0 +1,32 @@
+{
+    "name": "clickhouse-sink-connect",
+    "config": {
+        "connector.class": "com.clickhouse.kafka.connect.ClickHouseSinkConnector",
+        "tasks.max": "1",
+        "exactlyOnce": "false",
+        "topics": "mysql_server.cdc.test_table",
+        "topic2TableMap": "mysql_server.cdc.test_table=test_table_log",
+
+        "hostname": "clickhouse",
+        "database": "cdc",
+        "username": "default",
+        "password": "default_password",
+        "port": "8123",
+
+
+        "value.converter.schemas.enable": "true",
+        "key.converter.schemas.enable": "true",
+
+        "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+        "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+
+        "value.converter.schema.registry.url":"http://schema-registry:8081",
+        "key.converter.schema.registry.url":"http://schema-registry:8081",
+
+        "errors.retry.timeout": "5",
+        "errors.tolerance": "all",
+        "errors.deadletterqueue.topic.name":"dlq_ch",
+        "errors.deadletterqueue.topic.replication.factor": 1
+
+    }
+}
